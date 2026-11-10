@@ -1,70 +1,61 @@
-# starter_v0 — tool declarations (intentionally vague).
-# Names and descriptions here are a rough first draft. Routing rules, name->handle
-# mapping, arg conventions (news/timeframe/Top), and the send-confirmation boundary
-# are NOT spelled out anywhere yet. Your job is to make these declarations + the
-# system prompt good enough that the agent routes correctly on the eval.
+# starter_v0 — tool declarations with purpose, routing, and argument conventions.
 #
 # If you rename a tool, keep the name in sync across:
 #   this file  ->  tools/__init__.py (TOOL_FUNCTIONS)  ->  data/eval_base.json + data/eval_research_extension.json
 # `pytest tests/test_tool_contract.py` checks this sync for you.
 #
-# TODO CP2 (student):
-#   - Rewrite every description: what it does, WHEN to use it, WHEN NOT to use it.
-#   - Spell out arg conventions in parameter descriptions (handle format, topic/timeframe, search_type).
-#   - Make the `send` confirmation boundary explicit.
-#   - Declare your new tool(s) at the end of this file.
 tools:
   # ---------------- Core tools ----------------
   - name: clarify
-    description: "Gửi một câu hỏi cho người dùng."
+    description: "Ask one concise question when required information is missing or confirmation is needed. Use before guessing an account/URL and before an external send. Do not use when the request is clear."
     parameters:
       type: object
       properties:
-        question: {type: string, default: "", description: "Câu hỏi"}
+        question: {type: string, default: "", description: "One specific question needed to continue"}
         response_type: {type: string, enum: [text, yes_no, choice], default: "text", description: "Kiểu trả lời"}
         options: {type: array, default: [], items: {type: string}, description: "Các lựa chọn"}
       required: [question]
 
   - name: timeline
-    description: "Lấy các bài đăng gần đây."
+    description: "Retrieve recent posts from one specific social account. Use only when the account is named; screenname is the handle without @ (e.g. Sam Altman=sama, Elon Musk=elonmusk). If account is missing, use clarify. Do not use for topic/keyword searches."
     parameters:
       type: object
       properties:
-        screenname: {type: string, default: "", description: "Tên tài khoản"}
-        limit: {type: integer, default: 5, description: "Số lượng"}
+        screenname: {type: string, default: "", description: "Account handle without @, e.g. sama or elonmusk"}
+        limit: {type: integer, default: 5, description: "Number of recent posts; preserve an explicit user count"}
       required: [screenname]
 
   - name: social_search
-    description: "Tìm trên mạng xã hội."
+    description: "Search social posts by topic or keywords, not one person's timeline and not general web pages. Use Latest for recent posts and Top when the user asks for popular/top posts."
     parameters:
       type: object
       properties:
-        query: {type: string, default: "", description: "Từ khóa"}
-        search_type: {type: string, enum: [Latest, Top], default: "Latest", description: "Cách sắp xếp"}
+        query: {type: string, default: "", description: "Core topic or keywords to search"}
+        search_type: {type: string, enum: [Latest, Top], default: "Latest", description: "Latest for newest posts; Top for popular/top posts"}
         limit: {type: integer, default: 5, description: "Số lượng"}
       required: [query]
 
   - name: lookup
-    description: "Tra cứu thông tin trên internet."
+    description: "Search the general web. Use topic=news for current events and topic=general for other research. Map today to timeframe=day, this week=week, this month=month, this year=year. Keep query to the core subject (e.g. AI), without news/time wording. For a supplied URL use fetch; for social posts use social_search."
     parameters:
       type: object
       properties:
-        query: {type: string, default: "", description: "Truy vấn"}
-        topic: {type: string, enum: [general, news], default: "general", description: "Phân loại"}
-        timeframe: {type: string, enum: [day, week, month, year], default: "week", description: "Khoảng thời gian"}
+        query: {type: string, default: "", description: "Core subject only, e.g. AI or robotics"}
+        topic: {type: string, enum: [general, news], default: "general", description: "news for current events; general for other web research"}
+        timeframe: {type: string, enum: [day, week, month, year], default: "week", description: "day=today, week=this week, month=this month, year=this year"}
         max_results: {type: integer, default: 5, description: "Số kết quả"}
       required: [query]
 
   - name: fetch
-    description: "Lấy nội dung từ một địa chỉ."
+    description: "Fetch and read content at a specific user-provided URL. If URL is missing, ask with clarify. Never invent URLs or use this for broad web search."
     parameters:
       type: object
       properties:
-        url: {type: string, default: "", description: "Địa chỉ"}
+        url: {type: string, default: "", description: "Exact URL supplied by the user"}
       required: [url]
 
   - name: format
-    description: "Trình bày dữ liệu đã có thành văn bản."
+    description: "Format items already retrieved by other tools as a digest. Use only when source items are available; this tool does not search or fetch information."
     parameters:
       type: object
       properties:
@@ -84,18 +75,35 @@ tools:
         headline: {type: string, default: "", description: "Tiêu đề"}
       required: [items, template]
 
+  - name: dedupe_sources
+    description: "Remove duplicate research items by normalized URL while preserving the first result. Use after combining source results and before formatting a digest; do not use to search for new information. Returns an error object for invalid items or URLs."
+    parameters:
+      type: object
+      properties:
+        items:
+          type: array
+          description: "Research items, each with a valid http(s) url; optional title/source/summary fields are preserved"
+          items:
+            type: object
+            properties:
+              title: {type: string}
+              url: {type: string}
+              source: {type: string}
+              summary: {type: string}
+      required: [items]
+
   # ---------------- Bonus tools ----------------
   - name: send
-    description: "Gửi một đoạn văn bản đi."
+    description: "Post text to the configured Telegram destination. This is an external action: call only after the user explicitly confirms the exact content, with confirmed=true. Never send on an initial request; ask for confirmation with clarify first."
     parameters:
       type: object
       properties:
         text: {type: string, default: "", description: "Nội dung"}
-        confirmed: {type: boolean, default: false, description: "Cờ xác nhận"}
+        confirmed: {type: boolean, default: false, description: "Must be true only after explicit user confirmation of the content"}
       required: [text]
 
   - name: policy
-    description: "Tìm trong tài liệu nội bộ."
+    description: "Search the local company policy knowledge base. Use for internal policy questions; not for public web research or external action confirmation."
     parameters:
       type: object
       properties:
@@ -105,7 +113,7 @@ tools:
       required: [query]
 
   - name: papers
-    description: "Tìm bài báo khoa học."
+    description: "Search arXiv for scientific papers. Use when asked to find papers; not for general news or web pages."
     parameters:
       type: object
       properties:
@@ -115,7 +123,7 @@ tools:
       required: [query]
 
   - name: paper_text
-    description: "Lấy nội dung text của một bài báo."
+    description: "Extract text from a specific arXiv paper identified by URL or arXiv ID. Use after a paper is identified; do not use to search for papers."
     parameters:
       type: object
       properties:
