@@ -49,3 +49,4 @@
 
 - Đóng góp: 100% hoàn thành các nhiệm vụ phụ trách theo phân công của nhóm.
 - Mức độ hài lòng: Toàn bộ suite test xanh hoàn toàn, tool mới hoạt động ổn định và giao diện chat trực quan, hỗ trợ tốt cho việc nghiệm thu bài lab.
+
