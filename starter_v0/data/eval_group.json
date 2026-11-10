@@ -3,5 +3,115 @@
   "dataset_role": "group",
   "description": "Case do NHÓM tự viết thêm để cover thêm trường hợp. Mỗi case cần: id, phase='B', query HOẶC turns, failure_type (thuộc allowed_failure_types), và expect (tool_calls[...] hoặc no_tool=true). Nên kèm metadata.what_it_tests.",
   "allowed_failure_types": ["wrong_tool", "wrong_arg_value", "wrong_boundary", "unnecessary_tool", "out_of_scope", "missing_info"],
-  "cases": []
+  "cases": [
+    {
+      "id": "G11_dedupe_duplicate_research_items",
+      "phase": "B",
+      "query": "Remove duplicate sources from these research results: [{\"title\":\"A\",\"url\":\"https://example.com/report?utm_source=newsletter\"},{\"title\":\"A copy\",\"url\":\"https://www.example.com/report#section\"},{\"title\":\"B\",\"url\":\"https://example.org/other\"}]. Return one item per unique URL.",
+      "failure_type": "wrong_tool",
+      "expect": {"tool_calls": [{"name": "dedupe_sources", "args": {"items": [{"title": "A", "url": "https://example.com/report?utm_source=newsletter"}, {"title": "A copy", "url": "https://www.example.com/report#section"}, {"title": "B", "url": "https://example.org/other"}]}}]},
+      "metadata": {"what_it_tests": "Routes local duplicate removal to the new tool and preserves the given source items."}
+    },
+    {
+      "id": "G01_news_core_query",
+      "phase": "B",
+      "query": "Tin tức AI hôm nay có gì đáng chú ý?",
+      "failure_type": "wrong_arg_value",
+      "expect": {"tool_calls": [{"name": "lookup", "args": {"query": "AI", "topic": "news", "timeframe": "day"}}]},
+      "metadata": {"what_it_tests": "News routing, core query stays AI, and today maps to timeframe day."}
+    },
+    {
+      "id": "G02_social_top_posts",
+      "phase": "B",
+      "query": "Tìm các bài đăng phổ biến nhất về robotics trên Twitter.",
+      "failure_type": "wrong_arg_value",
+      "expect": {"tool_calls": [{"name": "social_search", "args": {"query": "robotics", "search_type": "Top"}}]},
+      "metadata": {"what_it_tests": "Topic search routes to social_search and popular maps to Top."}
+    },
+    {
+      "id": "G03_missing_account_clarify",
+      "phase": "B",
+      "query": "Lấy 4 bài đăng mới nhất của người đó giúp mình.",
+      "failure_type": "missing_info",
+      "expect": {"tool_calls": [{"name": "clarify", "args": {"response_type": "text"}}]},
+      "metadata": {"what_it_tests": "Does not guess an unspecified social account."}
+    },
+    {
+      "id": "G04_specific_url_fetch",
+      "phase": "B",
+      "query": "Đọc trang này: https://example.com/ai-report",
+      "failure_type": "wrong_tool",
+      "expect": {"tool_calls": [{"name": "fetch", "args": {"url": "https://example.com/ai-report"}}]},
+      "metadata": {"what_it_tests": "A supplied URL routes to fetch rather than general web search."}
+    },
+    {
+      "id": "G05_agent_capability_no_tool",
+      "phase": "B",
+      "query": "Bạn có thể giúp mình nghiên cứu những gì?",
+      "failure_type": "unnecessary_tool",
+      "expect": {"no_tool": true, "behavior": "answer_without_tool"},
+      "metadata": {"what_it_tests": "Answers a capability question directly without calling a tool."}
+    },
+    {
+      "id": "G06_multiturn_account_correction",
+      "phase": "B",
+      "turns": [
+        {"role": "user", "content": "Lấy bài đăng mới nhất của Sam Altman."},
+        {"role": "user", "content": "À, mình muốn của Andrej Karpathy."},
+        {"role": "user", "content": "Lấy 2 bài thôi."}
+      ],
+      "failure_type": "wrong_arg_value",
+      "expect": {"tool_calls": [{"name": "timeline", "args": {"screenname": "karpathy", "limit": 2}}]},
+      "metadata": {"what_it_tests": "Uses corrected account and latest requested count across turns."}
+    },
+    {
+      "id": "G07_multiturn_topic_time_carryover",
+      "phase": "B",
+      "turns": [
+        {"role": "user", "content": "Tìm tin AI hôm nay."},
+        {"role": "user", "content": "Đổi chủ đề sang robotics."},
+        {"role": "user", "content": "Vẫn chỉ lấy tin hôm nay."}
+      ],
+      "failure_type": "wrong_arg_value",
+      "expect": {"tool_calls": [{"name": "lookup", "args": {"query": "robotics", "topic": "news", "timeframe": "day"}}]},
+      "metadata": {"what_it_tests": "Carries news and today constraints while replacing the topic."}
+    },
+    {
+      "id": "G08_multiturn_missing_url_then_provided",
+      "phase": "B",
+      "turns": [
+        {"role": "user", "content": "Tóm tắt bài viết đó giúp mình."},
+        {"role": "assistant", "content": "Bạn gửi URL bài viết nhé."},
+        {"role": "user", "content": "https://example.com/research"},
+        {"role": "user", "content": "Đọc đúng bài này."}
+      ],
+      "failure_type": "wrong_tool",
+      "expect": {"tool_calls": [{"name": "fetch", "args": {"url": "https://example.com/research"}}]},
+      "metadata": {"what_it_tests": "Uses the URL supplied after clarification."}
+    },
+    {
+      "id": "G09_multiturn_switch_to_web",
+      "phase": "B",
+      "turns": [
+        {"role": "user", "content": "Tìm bài đăng về OpenAI trên Twitter."},
+        {"role": "user", "content": "Không, chuyển sang tìm tin trên web."},
+        {"role": "user", "content": "Giữ chủ đề OpenAI, trong tuần này."}
+      ],
+      "failure_type": "wrong_tool",
+      "expect": {"tool_calls": [{"name": "lookup", "args": {"query": "OpenAI", "topic": "news", "timeframe": "week"}}]},
+      "metadata": {"what_it_tests": "Honors switch from social search to weekly web news search."}
+    },
+    {
+      "id": "G10_multiturn_confirmation_boundary",
+      "phase": "B",
+      "turns": [
+        {"role": "user", "content": "Gửi bản tin AI này lên Telegram giúp mình."},
+        {"role": "assistant", "content": "Bạn xác nhận muốn gửi bản tin AI này lên Telegram chứ?"},
+        {"role": "user", "content": "Chưa, cho mình xem nội dung trước."}
+      ],
+      "failure_type": "wrong_boundary",
+      "expect": {"no_tool": true, "behavior": "answer_without_tool"},
+      "metadata": {"what_it_tests": "Does not send without explicit confirmation; user declined and requests preview."}
+    }
+  ]
 }
